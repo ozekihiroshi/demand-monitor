@@ -1,0 +1,10 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "Artisan: version", "type": "shell", "command": "docker compose exec -w /var/www/html app php artisan --version" },
+    { "label": "Artisan: migrate", "type": "shell", "command": "docker compose exec -w /var/www/html app php artisan migrate" },
+    { "label": "Cache: all", "type": "shell", "command": "docker compose exec -w /var/www/html app sh -lc 'php artisan config:cache && php artisan route:cache && php artisan view:cache'" },
+    { "label": "Nginx: reload", "type": "shell", "command": "docker compose exec webserver nginx -s reload" }
+  ]
+}
+
