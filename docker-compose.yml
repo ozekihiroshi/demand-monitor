@@ -62,6 +62,17 @@ services:
     networks:
       - web
 
+  node:
+    image: node:20-alpine
+    working_dir: /var/www/html
+    volumes:
+      - ./src:/var/www/html
+    command: sh -c "npm install && npm run dev"
+    depends_on:
+      - app
+    networks:
+      - web
+
 networks:
   web:
     driver: bridge
