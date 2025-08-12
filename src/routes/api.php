@@ -1,10 +1,9 @@
 <?php
+// routes/api.php
+use App\Http\Controllers\Api\V1\SeriesController;
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\DemandGraphController;
-
-    // とりあえず固定値 or 後でDB参照に差し替え
-Route::get('/restfull/demand/{demand_ip}', [DemandGraphController::class, 'restfull']);
-Route::get('/demand/demand', [DemandGraphController::class, 'demand']);
-Route::get('/demand/index',  [DemandGraphController::class, 'index']);
+Route::prefix('v1')->group(function () {
+    Route::get('meters/{code}/series', [SeriesController::class, 'series']); // 30m/1m 両対応
+    Route::get('meters/{code}/demand', [SeriesController::class, 'demand']); // 瞬間/積算/予測
+});
 
