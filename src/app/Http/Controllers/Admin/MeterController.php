@@ -8,14 +8,16 @@ use App\Models\LegacyUser;
 
 class MeterController extends Controller
 {
-    public function index() {
+    public function index()
+    {
         $meters = LegacyUser::query()
-            ->select('uid as code','name','rate','shikiichi')
+            ->select('uid as code', 'name', 'rate', 'shikiichi')
             ->orderBy('uid')->limit(200)->get();
         return view('admin.meters.index', compact('meters'));
     }
 
-    public function series(string $code) {
+    public function series(string $code)
+    {
         $m = LegacyUser::find($code);
         return view('admin.meters.series', [
             'code' => $code,
@@ -24,12 +26,17 @@ class MeterController extends Controller
         ]);
     }
 
-    public function demand(string $code) {
+    public function demand(string $code)
+    {
         $m = LegacyUser::find($code);
         return view('admin.meters.demand', [
-            'code' => $code,
-            'rate' => $m?->rate ?? 0,
+            'code'      => $code,
+            'rate'      => $m?->rate ?? 0,
             'threshold' => $m?->shikiichi ?? 800,
         ]);
+    }
+    public function getRouteKeyName(): string
+    {
+        return 'code'; // /admin/meters/{meter:code} で解決できるように
     }
 }

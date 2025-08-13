@@ -112,6 +112,24 @@ return [
             // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
 
+	'legacy' => [
+        'driver' => 'mysql',
+        'host' => env('DB_LEGACY_HOST','172.31.6.41'),
+        'port' => env('DB_LEGACY_PORT','3306'),
+        'database' => env('DB_LEGACY_DATABASE','legacy'),
+        'username' => env('DB_LEGACY_USERNAME','readonly'),
+        'password' => env('DB_LEGACY_PASSWORD',''),
+        'unix_socket' => env('DB_LEGACY_SOCKET', ''),
+        'charset' => 'utf8mb4',
+        'collation' => 'utf8mb4_unicode_ci',
+        'prefix' => '',
+        'strict' => false,
+        'engine' => null,
+        'options' => extension_loaded('pdo_mysql') ? array_filter([
+            PDO::MYSQL_ATTR_SSL_CA => env('DB_LEGACY_SSL_CA'),
+        ]) : [],
+        ],
+
     ],
 
     /*

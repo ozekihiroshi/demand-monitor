@@ -1,0 +1,80 @@
+<?php
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+    public function up(): void
+    {
+        // 1) code を追加（まずは NULL可 + UNIQUE）
+        if (!Schema::hasColumn('meters', 'code')) {
+            Schema::table('meters', function (Blueprint $table) {
+                $table->string('code')->nullable()->after('id');
+                $table->unique('code');
+            });
+            // 既存の demand_ip を code に移す（あれば）
+            DB::statement("UPDATE `meters` SET `code` = `demand_ip` WHERE `code` IS NULL AND `demand_ip` IS NOT NULL");
+            // NOT NULL に変更（MySQL）
+            DB::statement("ALTER TABLE `meters` MODIFY `code` VARCHAR(255) NOT NULL");
+        }
+
+        // 2) legacy_uid
+        if (!Schema::hasColumn('meters', 'legacy_uid')) {
+            Schema::table('meters', function (Blueprint $table) {
+                $table->unsignedBigInteger('legacy_uid')->nullable()->after('code');
+                $table->index('legacy_uid');
+            });
+        }
+
+        // 3) group_id（groups への FK）
+        if (!Schema::hasColumn('meters', 'group_id')) {
+            Schema::table('meters', function (Blueprint $table) {
+                $table->foreignId('group_id')->nullable()->after('name')->constrained('groups')->nullOnDelete();
+            });
+        }
+
+        // 4) rate/threshold override
+        if (!Schema::hasColumn('meters', 'rate_override')) {
+            Schema::table('meters', function (Blueprint $table) {
+                $table->decimal('rate_override', 10, 4)->nullable()->after('group_id');
+            });
+        }
+        if (!Schema::hasColumn('meters', 'threshold_override')) {
+            Schema::table('meters', function (Blueprint $table) {
+                $table->decimal('threshold_override', 10, 4)->nullable()->after('rate_override');
+            });
+        }
+    }
+
+    public function down(): void
+    {
+        // 必要なら丁寧に戻します（インデックス名は環境で異なることあり）
+        if (Schema::hasColumn('meters','threshold_override')) {
+            Schema::table('meters', fn(Blueprint $t) => $t->dropColumn('threshold_override'));
+        }
+        if (Schema::hasColumn('meters','rate_override')) {
+            Schema::table('meters', fn(Blueprint $t) => $t->dropColumn('rate_override'));
+        }
+        if (Schema::hasColumn('meters','group_id')) {
+            Schema::table('meters', function (Blueprint $t) {
+                $t->dropForeign(['group_id']);
+                $t->dropColumn('group_id');
+            });
+        }
+        if (Schema::hasColumn('meters','legacy_uid')) {
+            Schema::table('meters', function (Blueprint $t) {
+                $t->dropIndex(['legacy_uid']);
+                $t->dropColumn('legacy_uid');
+            });
+        }
+        if (Schema::hasColumn('meters','code')) {
+            Schema::table('meters', function (Blueprint $t) {
+                // インデックス名は `meters_code_unique` のはず
+                $t->dropUnique('meters_code_unique');
+                $t->dropColumn('code');
+            });
+        }
+    }
+};
+
