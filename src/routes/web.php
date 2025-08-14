@@ -1,14 +1,16 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Admin\MeterController;        // Inertia（新UI）
-use App\Http\Controllers\Admin\LegacyMeterController;  // 旧Bladeグラフ用
+use Illuminate\Foundation\Application;
 use Inertia\Inertia;
 
-/* --- 公開トップなど --- */
+/* Controllers */
+use App\Http\Controllers\ProfileController;           // プロファイル（Inertia）
+use App\Http\Controllers\Admin\DashboardController;   // 管理ダッシュボード
+use App\Http\Controllers\Admin\MeterController;       // 新CRUD（Inertia）
+use App\Http\Controllers\Admin\LegacyMeterController; // 旧グラフ（Blade）
+
+/* --- 公開トップなど（そのまま） --- */
 Route::get('/', function () {
     return Inertia::render('Welcome', [
         'canLogin'       => Route::has('login'),
@@ -18,28 +20,34 @@ Route::get('/', function () {
     ]);
 });
 
-/* --- （必要なら）公開チャート --- */
-Route::get('/meters/{code}/index',   fn($code) => view('charts.index',   ['code'=>$code,'bucket'=>'30m']));
-Route::get('/meters/{code}/index01', fn($code) => view('charts.index',   ['code'=>$code,'bucket'=>'1m']));
-Route::get('/meters/{code}/demand',  fn($code) => view('charts.demand',  ['code'=>$code]));
+/* --- （必要なら）公開チャート（そのまま温存） --- */
+Route::get('/meters/{code}/index',    fn($code) => view('charts.index',  ['code' => $code, 'bucket' => '30m']));
+Route::get('/meters/{code}/index01',  fn($code) => view('charts.index',  ['code' => $code, 'bucket' => '1m']));
+Route::get('/meters/{code}/demand',   fn($code) => view('charts.demand', ['code' => $code]));
 
-/* --- 認証系 --- */
+/* --- 認証系（そのまま） --- */
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', fn() => Inertia::render('Dashboard'))->name('dashboard');
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::get('/profile',   [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::delete('/profile',[ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-Route::middleware(['auth','verified'])->prefix('admin')->name('admin.')->group(function () {
-    Route::get('/', [DashboardController::class,'index'])->name('dashboard');
-    Route::get('/meters', [MeterController::class,'index'])->name('meters.index');
+/* --- 管理（auth+verified のみ1回定義） --- */
+Route::middleware(['auth','verified'])
+    ->prefix('admin')->name('admin.')
+    ->group(function () {
+        // ダッシュボード
+        Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
-    // ← ここを明示で :code に
-    Route::get('/meters/{meter:code}', [MeterController::class,'show'])->name('meters.show');
-    Route::get('/meters/{meter:code}/series', [LegacyMeterController::class,'series'])->name('meters.series');
-    Route::get('/meters/{meter:code}/demand', [LegacyMeterController::class,'demand'])->name('meters.demand');
-});
+        // 旧グラフ（URL互換を維持）— 登録主義＆Policyで保護（Controller内）
+        Route::get('meters/{code}/series', [LegacyMeterController::class, 'series'])->name('meters.series');
+        Route::get('meters/{code}/demand', [LegacyMeterController::class, 'demand'])->name('meters.demand');
 
+        // 新CRUD（Inertia）— code でルートバインド、showは未実装なので除外
+        Route::resource('meters', MeterController::class)
+            ->parameters(['meters' => 'meter:code'])
+            ->except(['show']);
+    });
 
 require __DIR__.'/auth.php';
