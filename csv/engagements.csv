@@ -1,0 +1,3 @@
+user_email,group_slug,role,status,effective_from,effective_to,contract_ref,notes
+ko@example.com,a-company,org-admin,active,2025-04-01,,AC-2025-001,
+ko@example.com,b-company,org-admin,active,2025-04-01,,BC-2025-007,

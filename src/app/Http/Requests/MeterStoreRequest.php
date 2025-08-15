@@ -1,4 +1,5 @@
 <?php
+// app/Http/Requests/MeterStoreRequest.php
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
@@ -15,7 +16,7 @@ class MeterStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'facility_id'        => ['required', 'exists:facilities,id'],
+            'facility_id'        => ['nullable', 'exists:facilities,id'],
             'code'               => ['required', 'alpha_dash', 'max:255', 'unique:meters,code'],
             'name'               => ['required', 'string', 'max:255'],
             'group_id'           => ['required', 'exists:groups,id'],
