@@ -1,19 +1,19 @@
 <!-- resources/js/Pages/Meters/Index.vue -->
 <script setup>
-import { router, Link } from '@inertiajs/vue3';
-const props = defineProps({ meters: Object, groups: Array, filters: Object, can: Object });
+import { router, Link } from '@inertiajs/vue3'
+const props = defineProps({ meters: Object, groups: Array, filters: Object, can: Object })
 
 function search(e) {
   router.get(route('admin.meters.index'), {
     search: e.target.value,
     group_id: props.filters.group_id
-  }, { preserveState: true, replace: true });
+  }, { preserveState: true, replace: true })
 }
 function pickGroup(e) {
   router.get(route('admin.meters.index'), {
     search: props.filters.search,
     group_id: e.target.value || null
-  }, { preserveState: true, replace: true });
+  }, { preserveState: true, replace: true })
 }
 </script>
 
@@ -29,12 +29,36 @@ function pickGroup(e) {
     </div>
 
     <table class="w-full table-auto">
-      <thead><tr><th>code</th><th>name</th><th>group</th><th></th></tr></thead>
+      <thead>
+        <tr>
+          <th>code</th>
+          <th>name</th>
+          <th>group</th>
+          <!-- ★ 追加: グラフ列 -->
+          <th class="text-right">グラフ</th>
+          <!-- 既存の編集ボタン用の空ヘッダ -->
+          <th></th>
+        </tr>
+      </thead>
       <tbody>
         <tr v-for="m in meters.data" :key="m.code">
           <td>{{ m.code }}</td>
           <td>{{ m.name }}</td>
           <td>{{ m.group?.name }}</td>
+
+          <!-- ★ 追加: 行ごとのグラフリンク -->
+          <td class="whitespace-nowrap text-right">
+            <Link
+              :href="route('admin.meters.charts.series', m.code)"
+              class="text-xs underline mr-3"
+            >時系列</Link>
+            <Link
+              :href="route('admin.meters.charts.demand', m.code)"
+              class="text-xs underline"
+            >需要</Link>
+          </td>
+
+          <!-- 既存: 編集リンク -->
           <td class="text-right">
             <Link :href="route('admin.meters.edit', m.code)" class="link">編集</Link>
           </td>
@@ -43,8 +67,13 @@ function pickGroup(e) {
     </table>
 
     <div class="mt-4 flex gap-2">
-      <Link v-for="link in meters.links" :key="link.url" :href="link.url || '#'" v-html="link.label"
-            :class="['px-2', link.active ? 'font-bold' : '']" />
+      <Link
+        v-for="link in meters.links"
+        :key="link.url || link.label"
+        :href="link.url || '#'"
+        v-html="link.label"
+        :class="['px-2', link.active ? 'font-bold' : '']"
+      />
     </div>
   </div>
 </template>
@@ -54,4 +83,3 @@ function pickGroup(e) {
 .btn-primary { background: #1f6feb; color:#fff; padding:.5rem .75rem; border-radius:.5rem; }
 .link { color:#1f6feb; }
 </style>
-

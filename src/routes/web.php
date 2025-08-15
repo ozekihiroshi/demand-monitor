@@ -9,6 +9,7 @@ use App\Http\Controllers\ProfileController; // プロファイル（Inertia）
 use Illuminate\Foundation\Application;      // 管理ダッシュボード
 use Illuminate\Support\Facades\Route;       // 新CRUD（Inertia）
 use Inertia\Inertia;
+
 // 旧グラフ（Blade）
 
 /* --- 公開トップなど（そのまま） --- */
@@ -34,22 +35,23 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-/* --- 管理（auth+verified のみ1回定義） --- */
-Route::middleware(['auth', 'verified'])
+// 管理（auth+verified）
+Route::middleware(['auth','verified'])
     ->prefix('admin')->name('admin.')
     ->group(function () {
-        // ダッシュボード
         Route::get('/', [DashboardController::class, 'index'])->name('dashboard');
 
-        // 旧グラフ（URL互換を維持）— 登録主義＆Policyで保護（Controller内）
-        Route::get('meters/{code}/series', [LegacyMeterController::class, 'series'])->name('meters.series');
-        Route::get('meters/{code}/demand', [LegacyMeterController::class, 'demand'])->name('meters.demand');
+        // ★ 管理グラフ 正系（codeでルートバインド）
+        Route::prefix('meters/{meter:code}/charts')->name('meters.charts.')->group(function () {
+            Route::get('series',  [LegacyMeterController::class, 'series'])->name('series');
+            Route::get('demand',  [LegacyMeterController::class, 'demand'])->name('demand');
+        });
 
-        // 新CRUD（Inertia）— code でルートバインド、showは未実装なので除外
         Route::resource('meters', MeterController::class)
             ->parameters(['meters' => 'meter:code'])
             ->except(['show']);
     });
+
 
 Route::middleware(['auth', 'verified'])
     ->prefix('admin/meters')
