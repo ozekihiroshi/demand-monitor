@@ -2,12 +2,13 @@
 // app/Models/Meter.php
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Meter extends Model
 {
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
 
     // 既存 + 追加カラムを明示（demand_ip は書かせないため入れない）
     protected $fillable = [
@@ -15,7 +16,7 @@ class Meter extends Model
         'code',
         'name',
         'channel',
-        'pulse_per_kwh',      // 8/10 migration に合わせる
+        'pulse_per_kwh', // 8/10 migration に合わせる
         'config',
         'legacy_uid',
         'group_id',
@@ -25,15 +26,18 @@ class Meter extends Model
 
     protected $casts = [
         'config'             => 'array',
-        'rate_override'      => 'decimal:4',  // 現状は数値として運用
-        'threshold_override' => 'decimal:4',  // 現状は数値として運用
+        'rate_override'      => 'array',    // JSONを配列で扱う
+        'threshold_override' => 'integer',  // 数値は integer で十分
         'pulse_per_kwh'      => 'integer',
     ];
 
     /* ===== Relations ===== */
-    public function facility() { return $this->belongsTo(Facility::class); }
-    public function demands()  { return $this->hasMany(Demand::class); }
-    public function group()    { return $this->belongsTo(Group::class); }
+    public function facility()
+    {return $this->belongsTo(Facility::class);}
+    public function demands()
+    {return $this->hasMany(Demand::class);}
+    public function group()
+    {return $this->belongsTo(Group::class);}
 
     /* ===== 互換レイヤ：旧名を読めるようにする ===== */
 
@@ -85,4 +89,15 @@ class Meter extends Model
         }
         $this->attributes['code'] = $value;
     }
+
+    // ★ 追加：Factory を明示（将来 MeterFactory を使うときの保険）
+    protected static function newFactory()
+    {
+        return \Database\Factories\MeterFactory::new ();
+    }
+
+    /** 未指定時のデフォルト（テスト・暫定運用用） */
+    protected $attributes = [
+        'facility_id' => 0,
+    ];
 }

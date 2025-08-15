@@ -16,26 +16,62 @@ class MeterController extends Controller
     {
         $this->authorize('viewAny', Meter::class);
 
+        $user    = $request->user();
+        $isSuper = $user->hasRole('super-admin');
+
+        // ★ユーザーが見えるグループIDを取得（super-admin は無制限）
+        $allowedGroupIds = $isSuper ? collect() : $user->groups()->pluck('groups.id');
+
         $q = Meter::query()->with('group')->orderBy('code');
-        if ($s = trim($request->get('search',''))) {
-            $q->where(fn($w) => $w
-                ->where('code','like',"%{$s}%")
-                ->orWhere('name','like',"%{$s}%")
-            );
+
+        // ★一覧の可視範囲を絞る
+        if (! $isSuper) {
+            if ($allowedGroupIds->isEmpty()) {
+                $q->whereRaw('1 = 0'); // 所属なしは0件
+            } else {
+                $q->whereIn('group_id', $allowedGroupIds);
+            }
         }
-        if ($gid = $request->get('group_id')) {
-            $q->where('group_id', $gid);
+
+        // フィルタ値（未定義対策で先に初期化）
+        $s   = trim((string) $request->get('search', ''));
+        $gid = $request->get('group_id');
+
+        if ($s !== '') {
+            $q->where(function ($w) use ($s) {
+                $w->where('code', 'like', "%{$s}%")
+                    ->orWhere('name', 'like', "%{$s}%");
+            });
+        }
+
+        // ★指定 group_id も可視範囲内のときだけ適用（漏えい防止）
+        if ($gid) {
+            if ($isSuper || $allowedGroupIds->contains((int) $gid)) {
+                $q->where('group_id', $gid);
+            } else {
+                $q->whereRaw('1 = 0'); // 見えないグループは常に0件
+            }
+        }
+
+        // ★プルダウン用のグループ一覧も可視範囲で絞る
+        $groupsQuery = Group::query()->orderBy('name')->select(['id', 'name']);
+        if (! $isSuper) {
+            if ($allowedGroupIds->isEmpty()) {
+                $groupsQuery->whereRaw('1 = 0');
+            } else {
+                $groupsQuery->whereIn('id', $allowedGroupIds);
+            }
         }
 
         return Inertia::render('Meters/Index', [
             'filters' => [
-                'search' => $s,
+                'search'   => $s,
                 'group_id' => $gid,
             ],
-            'groups' => Group::orderBy('name')->get(['id','name']),
-            'meters' => $q->paginate(20)->withQueryString(),
-            'can' => [
-                'create' => $request->user()->can('create', Meter::class),
+            'groups'  => $groupsQuery->get(),
+            'meters'  => $q->paginate(20)->withQueryString(),
+            'can'     => [
+                'create' => $user->can('create', Meter::class),
             ],
         ]);
     }
@@ -44,15 +80,20 @@ class MeterController extends Controller
     {
         $this->authorize('create', Meter::class);
         return Inertia::render('Meters/Form', [
-            'meter' => null,
-            'groups' => Group::orderBy('name')->get(['id','name']),
+            'meter'  => null,
+            'groups' => Group::orderBy('name')->get(['id', 'name']),
         ]);
     }
 
     public function store(MeterStoreRequest $request)
     {
         $this->authorize('create', Meter::class);
-        $meter = Meter::create($request->validated());
+        $data = $request->validated();
+        if (array_key_exists('rate_override', $data) && is_string($data['rate_override'])) {
+            $decoded               = json_decode($data['rate_override'], true);
+            $data['rate_override'] = $decoded ?? null;
+        }
+        $meter = Meter::create($data);
         return redirect()->route('admin.meters.edit', $meter->code)
             ->with('success', 'メーターを作成しました。');
     }
@@ -61,15 +102,20 @@ class MeterController extends Controller
     {
         $this->authorize('update', $meter);
         return Inertia::render('Meters/Form', [
-            'meter' => $meter->only(['code','name','group_id','threshold_override','rate_override']),
-            'groups' => Group::orderBy('name')->get(['id','name']),
+            'meter'  => $meter->only(['code', 'name', 'group_id', 'threshold_override', 'rate_override']),
+            'groups' => Group::orderBy('name')->get(['id', 'name']),
         ]);
     }
 
     public function update(MeterUpdateRequest $request, Meter $meter)
     {
         $this->authorize('update', $meter);
-        $meter->update($request->validated());
+        $data = $request->validated();
+        if (array_key_exists('rate_override', $data) && is_string($data['rate_override'])) {
+            $decoded               = json_decode($data['rate_override'], true);
+            $data['rate_override'] = $decoded ?? null;
+        }
+        $meter->update($data);
         return back()->with('success', 'メーターを更新しました。');
     }
 

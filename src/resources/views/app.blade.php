@@ -12,7 +12,10 @@
   {{-- Vite：Breeze 既定。必ずこの2つの入力を渡す --}}
 
   @routes{{-- @routes --}}
-  @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"])
+  {{-- @vite(['resources/js/app.js', "resources/js/Pages/{$page['component']}.vue"]) --}}
+
+  <!-- 変更後 -->
+  @vite('resources/js/app.js')
   @inertiaHead
 </head>
 <body class="font-sans antialiased">
