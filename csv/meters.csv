@@ -1,3 +1,0 @@
-facility_slug,code,name,kind,pulse_per_kwh,channel,threshold_override_kw,rate_override_json,legacy_uid,deleted_at
-a-plant-1,d100318,主幹メーター,consumption,1000,,900,,,
-a-plant-1,d100346,ライン1,consumption,1000,,,

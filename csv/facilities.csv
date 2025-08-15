@@ -1,4 +1,0 @@
-group_slug,facility_slug,name,timezone,default_threshold_kw,default_rate_json
-a-company,a-plant-1,第1工場,Asia/Tokyo,800,"{""version"":1,""currency"":""JPY"",""plan"":{""base"":1100,""energy"":[{""up_to"":null,""unit"":""kWh"",""price"":26.4}]}}"
-a-company,a-plant-2,第2工場,Asia/Tokyo,,
- 
