@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\MeterStoreRequest;
 use App\Http\Requests\MeterUpdateRequest;
+use App\Models\Company;
 use App\Models\Group;
 use App\Models\Meter;
 use Illuminate\Http\Request;
@@ -12,6 +13,7 @@ use Inertia\Inertia;
 
 class MeterController extends Controller
 {
+
     public function index(Request $request)
     {
         $this->authorize('viewAny', Meter::class);
@@ -19,23 +21,23 @@ class MeterController extends Controller
         $user    = $request->user();
         $isSuper = $user->hasRole('super-admin');
 
-        // ★ユーザーが見えるグループIDを取得（super-admin は無制限）
-        $allowedGroupIds = $isSuper ? collect() : $user->groups()->pluck('groups.id');
+        // ★会社スコープ（engagements ベースの暫定実装）
+        $companyIds = $isSuper
+        ? collect()
+        : $request->user()->engagements()->active()->pluck('company_id');
 
-        $q = Meter::query()->with('group')->orderBy('code');
+        $q = Meter::query()->with(['facility.company'])->orderBy('code');
 
-        // ★一覧の可視範囲を絞る
         if (! $isSuper) {
-            if ($allowedGroupIds->isEmpty()) {
-                $q->whereRaw('1 = 0'); // 所属なしは0件
+            if ($companyIds->isEmpty()) {
+                $q->whereRaw('1=0');
             } else {
-                $q->whereIn('group_id', $allowedGroupIds);
+                $q->whereHas('facility', fn($w) => $w->whereIn('company_id', $companyIds));
             }
         }
 
-        // フィルタ値（未定義対策で先に初期化）
         $s   = trim((string) $request->get('search', ''));
-        $gid = $request->get('group_id');
+        $cid = $request->get('company_id');
 
         if ($s !== '') {
             $q->where(function ($w) use ($s) {
@@ -43,36 +45,25 @@ class MeterController extends Controller
                     ->orWhere('name', 'like', "%{$s}%");
             });
         }
-
-        // ★指定 group_id も可視範囲内のときだけ適用（漏えい防止）
-        if ($gid) {
-            if ($isSuper || $allowedGroupIds->contains((int) $gid)) {
-                $q->where('group_id', $gid);
+        if ($cid) {
+            if ($isSuper || $companyIds->contains((int) $cid)) {
+                $q->whereHas('facility', fn($w) => $w->where('company_id', $cid));
             } else {
-                $q->whereRaw('1 = 0'); // 見えないグループは常に0件
+                $q->whereRaw('1=0');
             }
         }
 
-        // ★プルダウン用のグループ一覧も可視範囲で絞る
-        $groupsQuery = Group::query()->orderBy('name')->select(['id', 'name']);
+        // 会社プルダウン
+        $companiesQuery = Company::query()->orderBy('name')->select(['id', 'name']);
         if (! $isSuper) {
-            if ($allowedGroupIds->isEmpty()) {
-                $groupsQuery->whereRaw('1 = 0');
-            } else {
-                $groupsQuery->whereIn('id', $allowedGroupIds);
-            }
+            $companiesQuery->whereIn('id', $companyIds);
         }
 
         return Inertia::render('Meters/Index', [
-            'filters' => [
-                'search'   => $s,
-                'group_id' => $gid,
-            ],
-            'groups'  => $groupsQuery->get(),
-            'meters'  => $q->paginate(20)->withQueryString(),
-            'can'     => [
-                'create' => $user->can('create', Meter::class),
-            ],
+            'filters'   => ['search' => $s, 'company_id' => $cid],
+            'companies' => $companiesQuery->get(),
+            'meters'    => $q->paginate(20)->withQueryString(),
+            'can'       => ['create' => $user->can('create', Meter::class)],
         ]);
     }
 

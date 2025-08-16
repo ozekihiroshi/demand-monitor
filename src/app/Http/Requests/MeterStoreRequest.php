@@ -9,17 +9,17 @@ class MeterStoreRequest extends FormRequest
     public function authorize(): bool
     {
         // ポリシーを使っているなら true でもOK（Controllerでauthorize済み）
-        //return $this->user()?->can('create', Meter::class) ?? false;
-        return true;
+        return $this->user()?->can('create', Meter::class) ?? false;
+        //return true;
     }
 
     public function rules(): array
     {
         return [
-            'facility_id'        => ['nullable', 'exists:facilities,id'],
+            'facility_id'        => ['required', 'exists:facilities,id'],
             'code'               => ['required', 'alpha_dash', 'max:255', 'unique:meters,code'],
             'name'               => ['required', 'string', 'max:255'],
-            'group_id'           => ['required', 'exists:groups,id'],
+            'group_id'           => ['nullable', 'exists:groups,id'],
             'threshold_override' => ['nullable', 'integer', 'min:0'],
             // 文字列(JSON)でも配列でも受けられるように一旦 nullable。前処理で配列へ。
             'rate_override'      => ['nullable'],

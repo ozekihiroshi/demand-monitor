@@ -1,7 +1,7 @@
 <!-- resources/js/Pages/Meters/Index.vue -->
 <script setup>
 import { router, Link } from '@inertiajs/vue3'
-const props = defineProps({ meters: Object, groups: Array, filters: Object, can: Object })
+const props = defineProps({ meters: Object, companies: Array, filters: Object, can: Object });
 
 function search(e) {
   router.get(route('admin.meters.index'), {
@@ -21,10 +21,12 @@ function pickGroup(e) {
   <div class="space-y-4">
     <div class="flex items-center gap-2">
       <input class="input" placeholder="検索: code / name" :value="filters.search" @input="search" />
-      <select class="select" :value="filters.group_id" @change="pickGroup">
-        <option value="">すべてのグループ</option>
-        <option v-for="g in groups" :key="g.id" :value="g.id">{{ g.name }}</option>
-      </select>
+
+  <select class="select" :value="filters.company_id" @change="pickCompany">
+    <option value="">すべての会社</option>
+    <option v-for="c in companies" :key="c.id" :value="c.id">{{ c.name }}</option>
+  </select>
+
       <Link v-if="can.create" :href="route('admin.meters.create')" class="btn-primary">新規作成</Link>
     </div>
 

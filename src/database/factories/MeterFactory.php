@@ -17,6 +17,7 @@ class MeterFactory extends Factory
             'facility_id' => Facility::factory(),
             'code' => 'd' . $this->faker->unique()->numberBetween(100000, 999999),
             'name' => $this->faker->streetName(),
+            'kind'               => 'consumption',
             'group_id' => Group::factory(),
             'threshold_override' => null,
             'rate_override' => null,

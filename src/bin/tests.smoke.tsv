@@ -1,0 +1,10 @@
+# category	role	method	url	expect_status	check_type	check_value
+API_JSON	public	GET	/api/v1/meters/d100318/series?bucket=1m	200	jq	.meter=="d100318" and .bucket=="1m"
+API_JSON	public	GET	/api/v1/meters/d100318/demand	        200	jq	.has("series") and .meter=="d100318"
+
+ADMIN_HTML	engineer	GET	/admin/meters	200	grep	メーター
+ADMIN_HTML	engineer	GET	/admin/meters/d100318/charts/series	200	grep	<canvas
+ADMIN_HTML	engineer	GET	/admin/meters/d100318/charts/demand	200	grep	<canvas
+
+FORBIDDEN	operator	GET	/admin/meters/create	403	none	-
+

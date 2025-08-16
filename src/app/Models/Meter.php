@@ -15,6 +15,7 @@ class Meter extends Model
         'facility_id',
         'code',
         'name',
+        'kind',     
         'channel',
         'pulse_per_kwh', // 8/10 migration に合わせる
         'config',
@@ -26,18 +27,22 @@ class Meter extends Model
 
     protected $casts = [
         'config'             => 'array',
-        'rate_override'      => 'array',    // JSONを配列で扱う
-        'threshold_override' => 'integer',  // 数値は integer で十分
+        'rate_override'      => 'array',   // JSONを配列で扱う
+        'threshold_override' => 'integer', // 数値は integer で十分
         'pulse_per_kwh'      => 'integer',
     ];
 
     /* ===== Relations ===== */
     public function facility()
     {return $this->belongsTo(Facility::class);}
+
     public function demands()
     {return $this->hasMany(Demand::class);}
+
     public function group()
     {return $this->belongsTo(Group::class);}
+
+
 
     /* ===== 互換レイヤ：旧名を読めるようにする ===== */
 
@@ -66,13 +71,14 @@ class Meter extends Model
     }
 
     /* ===== “実効値”の算出アクセサ（UIで便利） ===== */
-    public function getEffectiveRateAttribute(): ?float
+    public function getEffectiveRateAttribute()
     {
-        return $this->rate_override ?? null;
+        return $this->rate_override ?? $this->facility?->default_rate;
     }
-    public function getEffectiveThresholdAttribute(): ?float
+
+    public function getEffectiveThresholdAttribute(): ?int
     {
-        return $this->threshold_override ?? null;
+        return $this->threshold_override ?? $this->facility?->default_threshold;
     }
 
     /* ===== ルーティングは code をキーに ===== */

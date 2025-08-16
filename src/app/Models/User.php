@@ -12,22 +12,35 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable, HasRoles;
 
     /** @var list<string> */
-    protected $fillable = ['name','email','password'];
+    protected $fillable = ['name', 'email', 'password'];
 
     /** @var list<string> */
-    protected $hidden = ['password','remember_token'];
+    protected $hidden = ['password', 'remember_token'];
 
     /** @return array<string,string> */
     protected function casts(): array
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed', // Laravel 11 標準
+            'password'          => 'hashed', // Laravel 11 標準
         ];
     }
 
     public function groups()
     {
         return $this->belongsToMany(Group::class)->withTimestamps()->withPivot('role');
+    }
+
+    public function engagements()
+    {
+        return $this->hasMany(\App\Models\Engagement::class);
+    }
+    
+    public function companies()
+    {
+        // through テーブルとして engagements を使う多対多
+        return $this->belongsToMany(\App\Models\Company::class, 'engagements')
+            ->withPivot(['role', 'status', 'effective_from', 'effective_to'])
+            ->withTimestamps();
     }
 }

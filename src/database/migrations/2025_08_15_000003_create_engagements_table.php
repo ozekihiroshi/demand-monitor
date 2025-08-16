@@ -6,6 +6,9 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
     public function up(): void {
+        if (\Illuminate\Support\Facades\Schema::hasTable('engagements')) {
+        return; // 既にあるなら二重作成しない
+    }
         Schema::create('engagements', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
