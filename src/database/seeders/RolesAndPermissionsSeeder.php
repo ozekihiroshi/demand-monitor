@@ -13,34 +13,35 @@ class RolesAndPermissionsSeeder extends Seeder
     {
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
-        // Guard は web 前提（config/auth.php のデフォルト）
         $guard = 'web';
 
-        // Permissions
+        // 権限（必要に応じて増減）
         $perms = [
-            'meters.view',
-            'meters.create',
-            'meters.update',
-            'meters.delete',
-            'meters.manage', // 総合管理（任意）
+            'meters.view', 'meters.create', 'meters.update', 'meters.delete', 'meters.manage',
+            'alerts.manage',
+            'users.manage',
+            'reports.view',
         ];
         foreach ($perms as $p) {
             Permission::findOrCreate($p, $guard);
         }
 
-        // Roles
-        $super   = Role::findOrCreate('super-admin', $guard);
-        $org     = Role::findOrCreate('org-admin',    $guard);
-        $op      = Role::findOrCreate('operator',     $guard);
-        $viewer  = Role::findOrCreate('viewer',       $guard);
+        // ロール（あなたの4ロール + 将来の閲覧専用）
+        $super   = Role::findOrCreate('super-admin',    $guard); // 全許可は Gate::before で処理
+        $eng     = Role::findOrCreate('engineer',       $guard); // 電気管理技術者
+        $company = Role::findOrCreate('company-admin',  $guard); // 企業の管理者
+        $facility= Role::findOrCreate('facility-admin', $guard); // 施設の管理者
+        $viewer  = Role::findOrCreate('viewer',         $guard); // （任意）閲覧専用
 
-        // 付与ポリシー（テストの意図に合わせて）
-        $viewer->givePermissionTo(['meters.view']);
-        $op->givePermissionTo(['meters.view', 'meters.update']);
-        $org->givePermissionTo(['meters.view', 'meters.create', 'meters.update', 'meters.delete']);
+        // 付与方針：engineer/company-admin/facility-admin は「編集可」（=フル権限）
+        $editAll = ['meters.view','meters.create','meters.update','meters.delete','meters.manage','alerts.manage','users.manage','reports.view'];
+        $eng->syncPermissions($editAll);
+        $company->syncPermissions($editAll);
+        $facility->syncPermissions($editAll);
 
-        // super-admin は Policy::before() で全部許可する設計だが、
-        // 念のため全付与しても良い（下行は任意）
-        $super->givePermissionTo($perms);
+        // viewer は閲覧のみ
+        $viewer->syncPermissions(['meters.view','reports.view']);
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }

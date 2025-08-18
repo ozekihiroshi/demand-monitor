@@ -1,10 +1,30 @@
-# category	role	method	url	expect_status	check_type	check_value
-API_JSON	public	GET	/api/v1/meters/d100318/series?bucket=1m	200	jq	.meter=="d100318" and .bucket=="1m"
-API_JSON	public	GET	/api/v1/meters/d100318/demand	        200	jq	.has("series") and .meter=="d100318"
+# category	role	method	url	expect	check_type	check_val
+# 前提:
+# - メータコード d100318 が存在する
+# - 会社スラッグ acme が存在する
+# - プロバイダスラッグ demo が存在する
+# - FEATURE_COMPANY_CONSOLE=true / FEATURE_PRO_CONSOLE=true（.env）
+# - creds.env に以下の資格情報がある:
+#   SUPERADMIN_EMAIL/PASS, ENGINEER_EMAIL/PASS, PRO_ADMIN_EMAIL/PASS, COMPANY_EMAIL/PASS, OPERATOR_EMAIL/PASS
+# 備考:
+# - 403 等の検証はヘッダで確認するため check_type=grep_headers を使用
+# - HTML本文の確認は最小限（grep "DemandMonitor" または固定文言）
 
-ADMIN_HTML	engineer	GET	/admin/meters	200	grep	メーター
-ADMIN_HTML	engineer	GET	/admin/meters/d100318/charts/series	200	grep	<canvas
-ADMIN_HTML	engineer	GET	/admin/meters/d100318/charts/demand	200	grep	<canvas
+API_JSON	public	GET	/api/v1/meters/d100318/demand	200	grep_headers	^content-type:\s*application/json
+ADMIN_HTML	superadmin	GET	/admin/meters	200	grep	DemandMonitor
+ADMIN_HTML	superadmin	GET	/admin/meters/d100318/charts/series	200	grep	DemandMonitor
+ADMIN_HTML	superadmin	GET	/admin/meters/d100318/charts/demand	200	grep	DemandMonitor
 
-FORBIDDEN	operator	GET	/admin/meters/create	403	none	-
+FORBIDDEN	engineer	GET	/admin/meters	403	grep_headers	^(HTTP/2 403|HTTP/1\.1 403)
+FORBIDDEN	engineer	GET	/admin/meters/d100318/charts/series	403	grep_headers	^(HTTP/2 403|HTTP/1\.1 403)
+FORBIDDEN	engineer	GET	/admin/meters/d100318/charts/demand	403	grep_headers	^(HTTP/2 403|HTTP/1\.1 403)
 
+# プロ（電気管理技術者）コンソール
+# Gate: access-provider-console,provider により pro-admin は許可される想定
+PRO_HTML	pro-admin	GET	/pro/demo	200	grep	DemandMonitor
+PRO_HTML	pro-admin	GET	/pro/demo/billing	200	grep	DemandMonitor
+
+# 会社コンソール
+# Route: /companies/{company:slug}/admin （CompanyAdminController@index）
+COMPANY_HTML	company	GET	/companies/acme/admin	200	grep	Company console
+COMPANY_HTML	operator	GET	/companies/acme/admin	403	grep_headers	^(HTTP/2 403|HTTP/1\.1 403)

@@ -10,6 +10,8 @@ services:
       - --certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web
       - --certificatesresolvers.myresolver.acme.email=hozeki.ozeki@gmail.com
       - --certificatesresolvers.myresolver.acme.storage=/acme.json
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
     ports:
       - "80:80"
       - "443:443"
@@ -28,6 +30,8 @@ services:
 
   db:
     image: mysql:5.7
+    ports:
+      - "127.0.0.1:3307:3306"
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: demand

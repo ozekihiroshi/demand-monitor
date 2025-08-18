@@ -8,5 +8,3 @@ interface MeterTimeseriesRepository
     /** 当日 瞬時/積算/線形予測 用 */
     public function getDemandToday(string $code, array $opts = []): array;
 }
-
-
