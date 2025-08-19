@@ -23,10 +23,16 @@ Route::get('/', function () {
 });
 
 /* --- 公開チャート（温存） --- */
-Route::get('/meters/{code}/index', fn($code) => view('charts.index', ['code' => $code, 'bucket' => '30m']));
-Route::get('/meters/{code}/index01', fn($code) => view('charts.index', ['code' => $code, 'bucket' => '1m']));
+/* --- 公開チャート --- */
+Route::get('/meters/{code}/series',  fn($code) => view('charts.series', ['code'=>$code, 'bucket'=>'30m', 'days'=>8]));
+Route::get('/meters/{code}/series1', fn($code) => view('charts.series', ['code'=>$code, 'bucket'=>'1m',  'days'=>1]));
 Route::get('/meters/{code}/demand', fn($code) => view('charts.demand', ['code' => $code]));
-
+/* --- 1分デマンド（7日：overlay/timeline 切替） --- */
+Route::get('/meters/{code}/minute', fn($code) => view('charts.minutely', [
+    'code' => $code,
+    'days' => 7,
+    'view' => 'overlay', // 既定
+]));
 /* --- 認証系 --- */
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', fn() => Inertia::render('Dashboard'))->name('dashboard');
