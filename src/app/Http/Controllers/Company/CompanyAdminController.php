@@ -1,4 +1,5 @@
 <?php
+// app/Http/Controllers/Company/CompanyAdminController.php
 namespace App\Http\Controllers\Company;
 
 use App\Http\Controllers\Controller;
@@ -8,14 +9,18 @@ class CompanyAdminController extends Controller
 {
     public function index(Company $company)
     {
+        // Gate（二重防御）
         $this->authorize('access-company-console', $company);
 
-        // 施設一覧（最小で id/name）
-        $facilities = $company->facilities()
-            ->select('id', 'name', 'company_id')
-            ->orderBy('name')
-            ->get();
+        // 施設をロード（必要なら並び順を調整）
+        $company->load(['facilities' => function ($q) {
+            $q->orderBy('name');
+        }]);
 
-        return view('company.dashboard', compact('company', 'facilities'));
+        // Blade へ明示的に渡す
+        return view('company.dashboard', [
+            'company'    => $company,
+            'facilities' => $company->facilities,
+        ]);
     }
 }

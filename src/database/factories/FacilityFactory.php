@@ -3,8 +3,8 @@
 namespace Database\Factories;
 
 use App\Models\Facility;
+use App\Models\Company;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use App\Models\Organization;
 
 class FacilityFactory extends Factory
 {
@@ -12,12 +12,14 @@ class FacilityFactory extends Factory
 
     public function definition(): array
     {
-        $orgName = $this->faker->company();
+        // 会社を先に作成し、organization を継承して整合性を保つ
+        $company = Company::factory()->create();
 
         return [
-            'name'            => $this->faker->company(),
-            'organization_id' => Organization::factory(),
+            "company_id"       => $company->id,
+            "organization_id"  => $company->organization_id,
+            "name"             => $this->faker->company(),
+            "main_meter_code"  => null,
         ];
     }
 }
-

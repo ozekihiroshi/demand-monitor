@@ -7,8 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Company extends Model
 {
     use HasFactory;
-    protected $fillable = ['slug', 'name'];
-
+    protected $fillable = ['name', 'slug', 'organization_id'];
     public function facilities()
     {
         return $this->hasMany(\App\Models\Facility::class);

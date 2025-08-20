@@ -4,7 +4,6 @@ namespace Database\Factories;
 
 use App\Models\Organization;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Str;
 
 class OrganizationFactory extends Factory
 {
@@ -12,12 +11,9 @@ class OrganizationFactory extends Factory
 
     public function definition(): array
     {
-        $name = $this->faker->unique()->company();
-
         return [
-            'name' => $name,
-            // organizations.slug が NOT NULL のため必ず埋める
-            'slug' => Str::slug($name.'-'.$this->faker->unique()->numerify('###')),
+            "name" => $this->faker->company(),
+            'slug' => $this->faker->unique()->slug(2), // ★ 追加
         ];
     }
 }

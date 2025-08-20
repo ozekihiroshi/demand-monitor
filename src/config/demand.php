@@ -6,6 +6,7 @@ return [
 
     // 秒。シリーズ/需要の結果を短期キャッシュ
     'cache_ttl' => (int) env('DEMAND_CACHE_TTL', 30),
+    'timeseries_connection' => env('DEMAND_TIMESERIES_CONNECTION', 'legacy'),
 ];
 
 

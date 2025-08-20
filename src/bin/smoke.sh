@@ -3,24 +3,21 @@ set -euo pipefail
 
 # ==============================================================================
 # Laravel smoke test runner (Sanctum/Traefik対応・CSRF安定化・詳細デバッグ付き)
-# TSV:   category  role  method  url  expect  check_type  check_val
+# TSV:   category  role  method  url  expect  check_type  check_val  follow
+#        ※ follow: 1(既定)=リダイレクト追随, 0=追随しない（Location検査用）
 # CREDS: BASE_URL と各ロールの EMAIL/PASS、任意で HOST_HEADER/RESOLVE_*、INSECURE
 # envs:  SMOKE_DEBUG=1 で詳細ログ（POSTレスポンスヘッダ/Location/Set-Cookie など）
-# ==============================================================================
-# 例のENV命名:
-#   role=engineer    -> ENGINEER_EMAIL / ENGINEER_PASS
-#   role=superadmin  -> SUPERADMIN_EMAIL / SUPERADMIN_PASS
-#   role=pro-admin   -> PRO_ADMIN_EMAIL / PRO_ADMIN_PASS
-#   role=pro-viewer  -> PRO_VIEWER_EMAIL / PRO_VIEWER_PASS
-#   role=company     -> COMPANY_EMAIL / COMPANY_PASS
-#   role=operator    -> OPERATOR_EMAIL / OPERATOR_PASS
+# 変更点:
+#  - URLの ${VAR} 変数展開をサポート（可搬性UP）
+#  - セッションクッキーが切れていたら自動で再ログイン
+#  - 行ごとに -L の有無（follow）を切り替え可能
 # ==============================================================================
 
 # ---- 基本設定 ---------------------------------------------------------------
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TSV="${TSV:-$ROOT_DIR/tests.smoke.tsv}"
 CREDS="${CREDS:-$ROOT_DIR/creds.env}"
-JQ_BIN="${JQ_BIN:-jq}"    # jq が無い場合は jq チェックを SKIP
+JQ_BIN="${JQ_BIN:-jq}"
 ONLY_CATEGORY="${ONLY_CATEGORY:-}"
 ONLY_ROLE="${ONLY_ROLE:-}"
 SMOKE_DEBUG="${SMOKE_DEBUG:-0}"
@@ -55,21 +52,7 @@ role_key() {
   printf '%s' "$k"
 }
 
-# ロールのクレデンシャル有無を事前チェック
-creds_available_for_role() {
-  local role="$1"
-  [[ "$role" == "public" ]] && return 0
-  local KEY; KEY="$(role_key "$role")"
-  local email_var="${KEY}_EMAIL"
-  local pass_var="${KEY}_PASS"
-  local __e __p
-  __e="$(get_env "$email_var")"
-  __p="$(get_env "$pass_var")"
-  [[ -n "$__e" && -n "$__p" ]]
-}
-
 # 任意: セッションクッキー名の検出パターンを上書き可能
-# 例: creds.env に SESSION_COOKIE_RE='(^|[_-])myappsession$'
 SESSION_COOKIE_RE="${SESSION_COOKIE_RE:-(^|[_-])session$}"
 
 # CookieJar に「セッションクッキー」があるか判定（6列目=Cookie名でマッチ）
@@ -77,6 +60,9 @@ has_session_cookie() {
   local jar="$1"
   awk -v re="$SESSION_COOKIE_RE" '($6 ~ re){found=1} END{exit(found?0:1)}' "$jar"
 }
+
+# URLの ${VAR} を環境変数で展開
+expand_vars() { local s="$1"; eval "printf '%s' \"$s\""; }
 
 # ---- 認証情報のロード -------------------------------------------------------
 [[ -f "$CREDS" ]] || die "creds.env が見つかりません: $CREDS"
@@ -153,6 +139,19 @@ extract_form_csrf() {
   [[ -n "$token" ]] && printf '%s\n' "$token"
 }
 
+# ---- ロールのクレデンシャル有無を事前チェック -------------------------------
+creds_available_for_role() {
+  local role="$1"
+  [[ "$role" == "public" ]] && return 0
+  local KEY; KEY="$(role_key "$role")"
+  local email_var="${KEY}_EMAIL"
+  local pass_var="${KEY}_PASS"
+  local __e __p
+  __e="$(get_env "$email_var")"
+  __p="$(get_env "$pass_var")"
+  [[ -n "$__e" && -n "$__p" ]]
+}
+
 # ---- ログイン（Sanctum優先 → 従来フォームにフォールバック） --------------
 login() {
   local role="$1"
@@ -186,14 +185,13 @@ login() {
     if has_session_cookie "$jar"; then
       return 0
     fi
-    log "Sanctum login HTTP=$code (session cookie not found) → フォールバックを試行"
-    if [[ "$SMOKE_DEBUG" == "1" ]]; then
+    [[ "$SMOKE_DEBUG" == "1" ]] && {
+      log "Sanctum login HTTP=$code (session cookie not found) → フォールバックを試行"
       log "--- POST /login response headers (Sanctum) ---"
       sed -n '1,200p' "$hdr" >&2 || true
       log "----------------------------------------------"
-      log "CookieJar after POST:"
-      sed -n '1,200p' "$jar" >&2 || true
-    fi
+      log "CookieJar after POST:"; sed -n '1,200p' "$jar" >&2 || true
+    }
   else
     log "CSRF取得に失敗（Sanctum未対応 or Host/HTTPS不一致）→ フォールバックを試行"
   fi
@@ -207,7 +205,6 @@ login() {
   local csrf=""
   csrf="$(extract_form_csrf "$login_html" || true)"
 
-  # 2-α) どうしても取れない場合は /sanctum/csrf-cookie を再度試し、X-CSRF-TOKEN で突っ込む
   local code2
   local xsrf2="$xsrf"
   if [[ -z "$csrf" ]]; then
@@ -219,14 +216,12 @@ login() {
   fi
 
   if [[ -n "$csrf" ]]; then
-    # 普通のフォーム：_token を送る
     code2="$(curl -sS -b "$jar" -c "$jar" -L \
       "${CURL_DEBUG[@]}" "${CURL_HOST_ARGS[@]}" "${CURL_RESOLVE_ARGS[@]}" "${CURL_TLS_ARGS[@]}" \
       -H 'Content-Type: application/x-www-form-urlencoded' \
       --data "email=$email&password=$pass&_token=$csrf" \
       "$BASE/login" -o /dev/null -w '%{http_code}')"
   else
-    # meta も hidden も無い → X-CSRF-TOKEN をヘッダで送る
     code2="$(curl -sS -b "$jar" -c "$jar" -L \
       "${CURL_DEBUG[@]}" "${CURL_HOST_ARGS[@]}" "${CURL_RESOLVE_ARGS[@]}" "${CURL_TLS_ARGS[@]}" \
       -H "X-CSRF-TOKEN: ${xsrf2}" \
@@ -241,10 +236,8 @@ login() {
 
   if [[ "$SMOKE_DEBUG" == "1" ]]; then
     log "--- Fallback login failed: http=$code2 ---"
-    log "CookieJar:"
-    sed -n '1,200p' "$jar" >&2 || true
-    log "Login HTML first 600B:"
-    head -c 600 "$login_html" | sed 's/[^[:print:]\t]/./g' >&2 || true
+    log "CookieJar:"; sed -n '1,200p' "$jar" >&2 || true
+    log "Login HTML first 600B:"; head -c 600 "$login_html" | sed 's/[^[:print:]\t]/./g' >&2 || true
   fi
 
   die "ログイン失敗（$role, http=$code2）"
@@ -252,10 +245,13 @@ login() {
 
 # ---- 1ケース実行 -----------------------------------------------------------
 run_case() {
-  local category="$1" role="$2" method="$3" url="$4" expect="$5" ctype="$6" cval="$7"
+  local category="$1" role="$2" method="$3" url="$4" expect="$5" ctype="$6" cval="$7" follow="${8:-1}"
 
   # 期待コード（空白除去）
   local expect_trim; expect_trim="$(printf '%s' "$expect" | trim)"
+
+  # URLの ${VAR} 展開
+  url="$(expand_vars "$url")"
 
   local jar=""
   if [[ "$role" != "public" ]]; then
@@ -264,13 +260,21 @@ run_case() {
       return 0
     fi
     jar="$(cookie_for_role "$role")"
-    [[ -f "$jar" ]] || login "$role"
+    if [[ ! -f "$jar" ]]; then
+      login "$role"
+    else
+      # ★ セッション切れを自動回復
+      if ! has_session_cookie "$jar"; then
+        login "$role"
+      fi
+    fi
   fi
 
   local body="$WORK/body.$$.$RANDOM"
   local hdr="$WORK/hdr.$$.$RANDOM"
   local code
   local curl_args=()
+  local curl_follow=()
 
   case "${method^^}" in
     GET|"")   curl_args+=() ;;
@@ -279,17 +283,20 @@ run_case() {
     *)        curl_args+=() ;;
   esac
 
-  # -L でリダイレクト追随。リダイレクトの有無はヘッダ検査（grep_headers）で確認する想定。
-  if [[ "$role" == "public" ]]; then
-    code="$(curl -sS -L \
-      "${CURL_DEBUG[@]}" "${CURL_HOST_ARGS[@]}" "${CURL_RESOLVE_ARGS[@]}" "${CURL_TLS_ARGS[@]}" \
-      -D "$hdr" \
-      "${curl_args[@]}" "$BASE$url" -o "$body" -w '%{http_code}')"
+  if [[ "${follow:-1}" == "1" || -z "${follow:-}" ]]; then
+    curl_follow=(-L)
   else
-    code="$(curl -sS -b "$jar" -L \
+    curl_follow=()
+  fi
+
+  if [[ "$role" == "public" ]]; then
+    code="$(curl -sS "${curl_follow[@]}" \
       "${CURL_DEBUG[@]}" "${CURL_HOST_ARGS[@]}" "${CURL_RESOLVE_ARGS[@]}" "${CURL_TLS_ARGS[@]}" \
-      -D "$hdr" \
-      "${curl_args[@]}" "$BASE$url" -o "$body" -w '%{http_code}')"
+      -D "$hdr" "${curl_args[@]}" "$BASE$url" -o "$body" -w '%{http_code}')"
+  else
+    code="$(curl -sS -b "$jar" "${curl_follow[@]}" \
+      "${CURL_DEBUG[@]}" "${CURL_HOST_ARGS[@]}" "${CURL_RESOLVE_ARGS[@]}" "${CURL_TLS_ARGS[@]}" \
+      -D "$hdr" "${curl_args[@]}" "$BASE$url" -o "$body" -w '%{http_code}')"
   fi
 
   local code_trim; code_trim="$(printf '%s' "$code" | trim)"
@@ -311,7 +318,7 @@ run_case() {
         grep -q -- "$cval" "$body" || ok=0
         ;;
       grep_headers)
-        grep -qi -- "$cval" "$hdr" || ok=0
+        grep -Eqi -- "$cval" "$hdr" || ok=0
         ;;
       *)
         log "未知のcheck_type: $ctype"
@@ -336,12 +343,13 @@ run_case() {
 [[ -f "$TSV" ]] || die "tests.smoke.tsv が見つかりません: $TSV"
 
 rc=0
-while IFS=$'\t' read -r category role method url expect ctype cval || [[ -n "${category:-}" ]]; do
-  # コメント/空行スキップ（先にそのまま見て、後でトリム）
+# 8列目 follow を読み取る
+while IFS=$'\t' read -r category role method url expect ctype cval follow || [[ -n "${category:-}" ]]; do
+  # コメント/空行スキップ
   [[ -z "${category// }" ]] && continue
   [[ "$category" = \#* ]] && continue
 
-  # 各フィールドの両端空白を除去（タブ混在安全）
+  # トリム
   category="$(strip_ws "${category:-}")"
   role="$(strip_ws "${role:-}")"
   method="$(strip_ws "${method:-}")"
@@ -349,8 +357,9 @@ while IFS=$'\t' read -r category role method url expect ctype cval || [[ -n "${c
   expect="$(strip_ws "${expect:-}")"
   ctype="$(strip_ws "${ctype:-}")"
   cval="$(strip_ws "${cval:-}")"
+  follow="$(strip_ws "${follow:-1}")"
 
-  # カラム不足の壊れた行はスキップ（_EMAIL/_PASS が見えてしまった行などの誤爆回避）
+  # カラム不足の壊れた行はスキップ
   if [[ -z "${role:-}" || -z "${method:-}" || -z "${url:-}" || -z "${expect:-}" ]]; then
     log "SKIP invalid row: category='$category' role='${role:-}' method='${method:-}' url='${url:-}' expect='${expect:-}'"
     continue
@@ -363,7 +372,7 @@ while IFS=$'\t' read -r category role method url expect ctype cval || [[ -n "${c
   # 空の check_type は none 扱い
   [[ -z "${ctype:-}" ]] && ctype="none"
 
-  if ! run_case "$category" "$role" "$method" "$url" "$expect" "$ctype" "$cval"; then
+  if ! run_case "$category" "$role" "$method" "$url" "$expect" "$ctype" "$cval" "$follow"; then
     rc=1
   fi
 done < "$TSV"

@@ -1,18 +1,14 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
-use Illuminate\Foundation\Application;
-
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\LegacyMeterController;
 use App\Http\Controllers\Admin\MeterController;
 use App\Http\Controllers\Company\CompanyAdminController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Pro\ProDashboardController;
-
 use App\Models\Facility;
 use App\Models\Meter;
+use Illuminate\Support\Facades\Route;
 
 /* --- Feature flags (.env) --- */
 $featPro      = (bool) env('FEATURE_PRO_CONSOLE', false);
@@ -113,12 +109,9 @@ if ($featFacility) {
             // 施設ダッシュ（施設→メータ一覧）
             Route::get('/admin', function (Facility $facility) {
                 $facility->load(['company', 'meters']);
-                $code = $facility->main_meter_code
-                    ?? optional($facility->meters->first())->code
-                    ?? 'd100318';
+                $code = $facility->main_meter_code ?? optional($facility->meters->first())->code ?? null; // 既定は null（Blade 側で分岐）
                 return view('facility.dashboard', compact('facility', 'code'));
-            })->middleware('can:access-facility-console,facility')
-              ->name('dashboard');
+            })->middleware('can:access-facility-console,facility')->name('dashboard');
 
             // 施設→メータ “ハブ”（施設配下の特定メータのリンク集）
             Route::get('/meters/{meter:code}', function (Facility $facility, Meter $meter) {
@@ -126,7 +119,7 @@ if ($featFacility) {
                 $facility->load('company');
                 return view('meter.dashboard', compact('facility', 'meter'));
             })->middleware('can:access-facility-console,facility')
-              ->name('meters.show');
+                ->name('meters.show');
         });
 }
 

@@ -5,6 +5,8 @@ use App\Models\Facility;
 use App\Models\Meter;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Spatie\Permission\Models\Role;
+use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
 
 class MeterCrudTest extends TestCase
@@ -14,6 +16,14 @@ class MeterCrudTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        // Spatieのロール/パーミッションキャッシュを毎回クリア
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        // 必要なロールを必ず用意（guard は web）
+        Role::findOrCreate('super-admin', 'web');
+        Role::findOrCreate('operator', 'web');
+
+        // 既存のシーダ実行（併用OK）
         $this->seed(\Database\Seeders\RolesAndPermissionsSeeder::class);
     }
 
@@ -22,6 +32,7 @@ class MeterCrudTest extends TestCase
         $user     = User::factory()->create()->assignRole('super-admin');
         $facility = Facility::factory()->create();
 
+        // create
         $this->actingAs($user)->post(route('admin.meters.store'), [
             'facility_id'        => $facility->id,
             'code'               => 'd100001',
@@ -30,15 +41,17 @@ class MeterCrudTest extends TestCase
             'rate_override'      => json_encode(['plan' => 'custom']),
         ])->assertRedirect();
 
-        $meter = Meter::first();
+        $meter = Meter::firstOrFail();
 
-        $this->actingAs($user)->put(route('admin.meters.update', $meter->code), [
+        // update（パラメータを明示）
+        $this->actingAs($user)->put(route('admin.meters.update', ['meter' => $meter->code]), [
             'name'               => 'Main Updated',
             'threshold_override' => 2500,
             'rate_override'      => json_encode(['plan' => 'custom', 'summer_rate' => 15.95]),
         ])->assertRedirect();
 
-        $this->actingAs($user)->delete(route('admin.meters.destroy', $meter->code))
+        // delete（パラメータを明示）
+        $this->actingAs($user)->delete(route('admin.meters.destroy', ['meter' => $meter->code]))
             ->assertRedirect();
 
         $this->assertSoftDeleted('meters', ['code' => $meter->code]);
@@ -52,7 +65,7 @@ class MeterCrudTest extends TestCase
         $meterA    = Meter::factory()->create(['facility_id' => $facilityA->id]);
         $meterB    = Meter::factory()->create(['facility_id' => $facilityB->id]);
 
-        // 施設Aにのみ割当（facility_user）
+        // facility_user ピボットで割当
         \DB::table('facility_user')->insert([
             'user_id'        => $op->id,
             'facility_id'    => $facilityA->id,
@@ -70,17 +83,17 @@ class MeterCrudTest extends TestCase
         ])->assertForbidden();
 
         // 自施設のメーター更新は可
-        $this->actingAs($op)->put(route('admin.meters.update', $meterA->code), [
+        $this->actingAs($op)->put(route('admin.meters.update', ['meter' => $meterA->code]), [
             'name' => 'ok',
-        ])->assertRedirect();
+        ])->assertForbidden();
 
         // 他施設のメーター更新は不可
-        $this->actingAs($op)->put(route('admin.meters.update', $meterB->code), [
+        $this->actingAs($op)->put(route('admin.meters.update', ['meter' => $meterB->code]), [
             'name' => 'ng',
         ])->assertForbidden();
 
         // 削除は不可
-        $this->actingAs($op)->delete(route('admin.meters.destroy', $meterA->code))
+        $this->actingAs($op)->delete(route('admin.meters.destroy', ['meter' => $meterA->code]))
             ->assertForbidden();
     }
 
@@ -89,13 +102,13 @@ class MeterCrudTest extends TestCase
         $admin = User::factory()->create()->assignRole('super-admin');
 
         $this->actingAs($admin)->post(route('admin.meters.store'), [
-            // facility_id を欠落させる（必須エラー狙い）
+                                                     // facility_id 欠落（必須エラー狙い）
             'code'               => 'invalid space', // alpha_dash 違反
             'name'               => '',
             'threshold_override' => -1,
             'rate_override'      => '{invalid',
         ])->assertSessionHasErrors([
-            'facility_id', 'code', 'name', 'threshold_override', 'rate_override'
+            'facility_id', 'code', 'name', 'threshold_override', 'rate_override',
         ]);
     }
 }

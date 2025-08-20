@@ -6,18 +6,24 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration {
     public function up(): void
     {
-        // 直接 CREATE TABLE（パーティション前提のため raw）
-        DB::unprepared(<<<'SQL'
+        // テスト環境（SQLite）ではこのマイグレーションをスキップ
+        $driver = DB::connection()->getDriverName();
+        if ($driver === 'sqlite') {
+            return;
+        }
+
+        // ここは従来の MySQL 向け DDL のまま
+        DB::statement(<<<'SQL'
 CREATE TABLE IF NOT EXISTS `demand` (
   `id` BIGINT(20) NOT NULL AUTO_INCREMENT,
   `data` INT(11) DEFAULT NULL,
-  `date` INT(11) NOT NULL DEFAULT 0,         -- UNIX秒（分丸め）
+  `date` INT(11) NOT NULL DEFAULT 0,
   `demand_ip` VARCHAR(15) DEFAULT NULL,
   `flag` TINYINT(4) DEFAULT 0,
   `stamp` INT(11) DEFAULT NULL,
   `delete_flag` TINYINT(4) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`,`date`),
-  UNIQUE KEY `uniq_minute` (`demand_ip`,`date`),          -- 1分1行を保証（重複防止）
+  UNIQUE KEY `uniq_minute` (`demand_ip`,`date`),
   KEY `idx_ip_date_stamp` (`demand_ip`,`date`,`stamp`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 PARTITION BY RANGE (`date`) (
@@ -35,6 +41,6 @@ SQL);
 
     public function down(): void
     {
-        DB::unprepared('DROP TABLE IF EXISTS `demand`');
+        DB::statement('DROP TABLE IF EXISTS demand');
     }
 };

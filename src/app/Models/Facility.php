@@ -8,7 +8,7 @@ class Facility extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['organization_id', 'name', 'address'];
+    protected $fillable = ['organization_id', 'name', 'address','main_meter_code'];
 
     public function organization()
     {return $this->belongsTo(Organization::class);}
