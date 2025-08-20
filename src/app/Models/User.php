@@ -35,12 +35,22 @@ class User extends Authenticatable
     {
         return $this->hasMany(\App\Models\Engagement::class);
     }
-    
+
     public function companies()
     {
         // through テーブルとして engagements を使う多対多
         return $this->belongsToMany(\App\Models\Company::class, 'engagements')
             ->withPivot(['role', 'status', 'effective_from', 'effective_to'])
             ->withTimestamps();
+    }
+    public function primaryCompany(): ?\App\Models\Company
+    {
+        return $this->companies()->orderByPivot('role', 'desc')->first();
+    }
+    public function primaryFacility(): ?\App\Models\Facility
+    {
+        // 会社→施設の優先一件でOKならこんな感じ（環境に合わせて）
+        $company = $this->primaryCompany();
+        return $company ? $company->facilities()->first() : null;
     }
 }

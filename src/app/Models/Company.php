@@ -10,8 +10,9 @@ class Company extends Model
     protected $fillable = ['slug', 'name'];
 
     public function facilities()
-    {return $this->hasMany(Facility::class);}
-
+    {
+        return $this->hasMany(\App\Models\Facility::class);
+    }
     public function engagements()
     {
         return $this->hasMany(\App\Models\Engagement::class);

@@ -16,7 +16,8 @@ class DatabaseSeeder extends Seeder
         // User::factory(10)->create();
         $this->call([
             RolesAndPermissionsSeeder::class,   // 先にロール/権限
-            UsersAndRolesFromEnvSeeder::class,  // 次にユーザー作成＋ロール付与
+            // UsersAndRolesFromEnvSeeder::class,  // 次にユーザー作成＋ロール付与
+            DemoOrgSeeder::class,
         ]);
     }
 }

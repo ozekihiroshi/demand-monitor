@@ -1,41 +1,33 @@
 <?php
 
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use Illuminate\Foundation\Application;
 
-/* Controllers */
 use App\Http\Controllers\Admin\AdminDashboardController;
 use App\Http\Controllers\Admin\LegacyMeterController;
 use App\Http\Controllers\Admin\MeterController;
+use App\Http\Controllers\Company\CompanyAdminController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Pro\ProDashboardController;
-use App\Http\Controllers\Company\CompanyAdminController; // ★ Company配下を使用
+
+use App\Models\Facility;
+use App\Models\Meter;
+
+/* --- Feature flags (.env) --- */
+$featPro      = (bool) env('FEATURE_PRO_CONSOLE', false);
+$featCompany  = (bool) env('FEATURE_COMPANY_CONSOLE', false);
+$featFacility = (bool) env('FEATURE_FACILITY_CONSOLE', false);
 
 /* --- 公開トップ --- */
 Route::get('/', function () {
-    return Inertia::render('Welcome', [
-        'canLogin'       => Route::has('login'),
-        'canRegister'    => Route::has('register'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion'     => PHP_VERSION,
-    ]);
-});
+    return view('guest.home');
+})->name('home');
 
-/* --- 公開チャート（温存） --- */
-/* --- 公開チャート --- */
-Route::get('/meters/{code}/series',  fn($code) => view('charts.series', ['code'=>$code, 'bucket'=>'30m', 'days'=>8]));
-Route::get('/meters/{code}/series1', fn($code) => view('charts.series', ['code'=>$code, 'bucket'=>'1m',  'days'=>1]));
-Route::get('/meters/{code}/demand', fn($code) => view('charts.demand', ['code' => $code]));
-/* --- 1分デマンド（7日：overlay/timeline 切替） --- */
-Route::get('/meters/{code}/minute', fn($code) => view('charts.minutely', [
-    'code' => $code,
-    'days' => 7,
-    'view' => 'overlay', // 既定
-]));
-/* --- 認証系 --- */
+/* --- 認証系（共通） --- */
 Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', fn() => Inertia::render('Dashboard'))->name('dashboard');
+    Route::get('/dashboard', \App\Http\Controllers\DashboardRedirectController::class)
+        ->name('dashboard');
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -62,12 +54,19 @@ Route::middleware(['auth', 'verified', 'can:access-admin'])
         });
     });
 
-/* --- Feature flags (.env) --- */
-$featPro      = (bool) env('FEATURE_PRO_CONSOLE', false);
-$featCompany  = (bool) env('FEATURE_COMPANY_CONSOLE', false);
-$featFacility = (bool) env('FEATURE_FACILITY_CONSOLE', false);
+/* --- 会社コンソール（Company） --- */
+if ($featCompany) {
+    Route::middleware(['auth', 'verified'])
+        ->prefix('companies/{company:slug}')
+        ->name('company.')
+        ->group(function () {
+            Route::get('/admin', [CompanyAdminController::class, 'index'])
+                ->middleware('can:access-company-console,company')
+                ->name('dashboard');
+        });
+}
 
-/* プロ向けコンソール */
+/* --- プロコンソール（Provider/Pro） --- */
 if ($featPro) {
     Route::middleware(['auth', 'verified'])
         ->prefix('pro/{provider:slug}')
@@ -83,34 +82,61 @@ if ($featPro) {
         });
 }
 
-/* 会社コンソール（★ 1本に統一） */
-if ($featCompany) {
-    Route::middleware(['auth', 'verified'])
-        ->prefix('companies/{company:slug}')
-        ->name('company.')
-        ->group(function () {
-            Route::get('/admin', [CompanyAdminController::class, 'index'])
-                ->middleware('can:access-company-console,company') // ← company を渡す
-                ->name('dashboard');
-        });
-}
+/* --- 公開チャート（ビュー）。$meter を eager load する版に統一 --- */
+Route::get('/meters/{code}/demand', function (string $code) {
+    $meter = Meter::with('facility.company')->where('code', $code)->firstOrFail();
+    return view('charts.demand', ['code' => $code, 'meter' => $meter]);
+})->name('meter.demand');
 
-/* 施設（将来） */
+Route::get('/meters/{code}/minute', function (string $code) {
+    $meter = Meter::with('facility.company')->where('code', $code)->firstOrFail();
+    return view('charts.minutely', ['code' => $code, 'days' => 7, 'view' => 'overlay', 'meter' => $meter]);
+})->name('meter.minute');
+
+Route::get('/meters/{code}/series', function (string $code) {
+    $meter = Meter::with('facility.company')->where('code', $code)->firstOrFail();
+    return view('charts.series', ['code' => $code, 'bucket' => '30m', 'days' => 8, 'meter' => $meter]);
+})->name('meter.series');
+
+/* 互換：昔の /meters/{code}/series1 も残したい場合（任意） */
+Route::get('/meters/{code}/series1', function (string $code) {
+    $meter = Meter::with('facility.company')->where('code', $code)->firstOrFail();
+    return view('charts.series', ['code' => $code, 'bucket' => '1m', 'days' => 1, 'meter' => $meter]);
+})->name('meter.series1');
+
+/* --- 施設ダッシュ & 施設配下メータの“ハブ” --- */
 if ($featFacility) {
-    Route::middleware(['auth', 'verified', 'can:access-facility-console'])
-        ->prefix('facilities/{facility}/admin')
+    Route::middleware(['auth', 'verified'])
+        ->prefix('facilities/{facility}')
         ->name('facility.')
         ->group(function () {
-            Route::get('/', fn() => response('Facility console: not implemented', 501))
-                ->name('dashboard');
+            // 施設ダッシュ（施設→メータ一覧）
+            Route::get('/admin', function (Facility $facility) {
+                $facility->load(['company', 'meters']);
+                $code = $facility->main_meter_code
+                    ?? optional($facility->meters->first())->code
+                    ?? 'd100318';
+                return view('facility.dashboard', compact('facility', 'code'));
+            })->middleware('can:access-facility-console,facility')
+              ->name('dashboard');
+
+            // 施設→メータ “ハブ”（施設配下の特定メータのリンク集）
+            Route::get('/meters/{meter:code}', function (Facility $facility, Meter $meter) {
+                abort_unless($meter->facility_id === $facility->id, 404);
+                $facility->load('company');
+                return view('meter.dashboard', compact('facility', 'meter'));
+            })->middleware('can:access-facility-console,facility')
+              ->name('meters.show');
         });
 }
 
-// すでに public なビュー (/meters/{code}/index, /demand) があるので、そこから叩くためのJSON
+/* --- 公開JSON（既存のpublicエンドポイントのまま） --- */
 Route::prefix('public')->name('public.')->group(function () {
     Route::get('meters/{meter:code}/series', [LegacyMeterController::class, 'seriesPublic'])
         ->name('meters.series');
     Route::get('meters/{meter:code}/demand', [LegacyMeterController::class, 'demandPublic'])
         ->name('meters.demand');
 });
+
+/* --- 認証ルート --- */
 require __DIR__ . '/auth.php';

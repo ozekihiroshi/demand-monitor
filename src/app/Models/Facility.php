@@ -20,7 +20,5 @@ class Facility extends Model
     {return $this->hasMany(Device::class);}
 
     public function company()
-    {return $this->belongsTo(Company::class, 'company_id');}
-
-
+    {return $this->belongsTo(\App\Models\Company::class);}
 }

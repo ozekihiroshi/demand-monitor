@@ -19,6 +19,14 @@
 </head>
 <body>
 <div id="wrap">
+  @if (!empty($meter) && $meter->relationLoaded('facility') && $meter->facility && $meter->facility->relationLoaded('company'))
+  @include('partials.breadcrumbs', ['crumbs' => [
+    ['label'=>$meter->facility->company->name, 'url'=>route('company.dashboard', $meter->facility->company)],
+    ['label'=>$meter->facility->name,          'url'=>route('facility.dashboard', $meter->facility)],
+    ['label'=>'メータ '.$meter->code,          'url'=>route('facility.meters.show', [$meter->facility, $meter])],
+    ['label'=>'当日リアルタイム'],
+  ]])
+  @endif
   <h3>{{ $code }} — 当日リアルタイム（30分枠：積算＆予測）</h3>
   <div id="alert" class="banner" style="display:none"></div>
   <div class="kpis" id="kpis" style="display:none">

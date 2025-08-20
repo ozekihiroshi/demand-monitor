@@ -1,5 +1,9 @@
 <?php
 // app/Models/LegacyDemand.php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
 class LegacyDemand extends Model {
     protected $connection = 'legacy';   // ← これを忘れずに
     protected $table = 'demand';
